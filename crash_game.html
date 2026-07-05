@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة Crash الاحترافية</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #1a2232; color: #ffffff; padding: 12px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+        .game-container { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 12px; }
+        
+        /* الهيدر العلوي مطابق تماماً للصورة */
+        .game-header { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 4px 0; }
+        .back-btn { background: none; border: none; color: #ffffff; font-size: 26px; cursor: pointer; display: flex; align-items: center; font-weight: bold; }
+        .header-balance-box { background-color: #212b3e; border-radius: 20px; padding: 6px 16px; display: flex; align-items: center; gap: 6px; font-weight: bold; font-size: 18px; color: #ffffff; direction: ltr; }
+        .balance-plus { color: #2ecc71; font-size: 20px; cursor: pointer; margin-left: 4px; font-weight: bold; }
+
+        /* الشاشة الرئيسية للعبة */
+        .chart-section { background-color: #212b3e; border-radius: 16px; position: relative; width: 100%; height: 260px; display: flex; justify-content: center; align-items: center; overflow: hidden; margin-top: 5px; }
+        
+        /* شارة التوقع العلوية بديل مباشر - مطابقة للفيديو تماماً */
+        .prediction-badge { position: absolute; top: 15px; right: 15px; background-color: #2c3a50; color: #f1c40f; font-size: 12px; padding: 6px 14px; border-radius: 20px; border: 1px solid #f1c40f; font-weight: bold; display: none; }
+        
+        /* شاشات الحالات (فوز / خسارة) */
+        .chart-section.crashed-state { background-color: rgba(192, 41, 43, 0.15); }
+
+        /* منحنى الطائرة SVG */
+        .chart-svg { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #plane-path { fill: none; stroke: #f1c40f; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1000; stroke-dashoffset: 1000; transition: stroke-dashoffset 0.1s linear; }
+        
+        /* نصوص العرض والعدادات */
+        .center-display-text { position: absolute; font-weight: bold; color: #ffffff; text-align: center; width: 100%; }
+        .countdown-style { font-size: 45px; }
+        .live-odds-style { font-size: 65px; top: 30%; font-weight: 800; }
+        .status-msg-style { font-size: 30px; font-weight: bold; }
+
+        /* لوحة التحكم والرهان - مطابقة تماماً للترتيب الجديد بالصورة */
+        .bet-control-panel { display: flex; gap: 10px; width: 100%; align-items: center; margin-top: 5px; }
+        .bet-amount-input { background-color: #212b3e; border: none; border-radius: 12px; width: 80px; height: 55px; font-size: 22px; font-weight: bold; color: #ffffff; text-align: center; outline: none; }
+        
+        /* زر الرهان الرئيسي الدائري الكبير */
+        .btn-main-action { color: #ffffff; border: none; border-radius: 28px; flex: 1; height: 55px; font-size: 20px; font-weight: bold; cursor: pointer; text-align: center; transition: background-color 0.2s; text-transform: uppercase; }
+        .btn-bet-place { background-color: #ff6f00; box-shadow: 0 4px 10px rgba(255, 111, 0, 0.2); }
+        .btn-bet-placed { background-color: #7f8c8d; cursor: not-allowed; }
+        .btn-cashout-active { background-color: #27ae60; font-size: 22px; }
+
+        /* جدول المستخدمين بالأسفل بتنسيق عمودي ممتاز */
+        .players-table-section { width: 100%; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .table-header { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.2fr; padding: 0 10px 5px 10px; font-size: 14px; color: #7f8c8d; font-weight: bold; text-align: center; border-bottom: 1px solid #212b3e; }
+        .player-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.2fr; background-color: #1f2838; border-radius: 8px; padding: 14px 10px; font-size: 14px; color: #ecf0f1; text-align: center; align-items: center; }
+        .row-username { font-weight: bold; color: #bdc3c7; text-align: right; padding-right: 5px; }
+        .row-odds { color: #f1c40f; font-weight: bold; }
+        .row-win { color: #2ecc71; font-weight: bold; text-align: left; padding-left: 5px; }
+        .row-bet { font-weight: bold; color: #ffffff; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="game-header">
+            <button class="back-btn" onclick="goBack()">➔</button>
+            <div class="header-balance-box">
+                <span id="header-user-balance">0.00</span>
+                <span>ج.م</span>
+                <span class="balance-plus" onclick="goToDeposit()">+</span>
+            </div>
+        </div>
+
+        <div class="chart-section" id="game-screen">
+            <div class="prediction-badge" id="prediction-status-badge">ستنفجر عند: جاري الحساب...</div>
+            
+            <svg class="chart-svg" viewBox="0 0 390 260">
+                <path id="plane-path" d="M 30 230 Q 180 210 340 50" />
+            </svg>
+            
+            <div class="center-display-text countdown-style" id="countdown-text">تبدأ خلال: 6</div>
+            <div class="center-display-text live-odds-style" id="live-odds-text" style="display: none;">1.00x</div>
+            <div class="center-display-text status-msg-style" id="status-msg-text" style="display: none;"></div>
+        </div>
+
+        <div class="bet-control-panel">
+            <button class="btn-main-action btn-bet-place" id="action-btn" onclick="handleMainAction()">PLACE A BET</button>
+            <input type="number" class="bet-amount-input" id="bet-input" value="20" min="5">
+        </div>
+
+        <div class="players-table-section">
+            <div class="table-header">
+                <div style="text-align: right; padding-right: 5px;">USER</div>
+                <div>ODDS</div>
+                <div>BET</div>
+                <div style="text-align: left; padding-left: 5px;">WIN</div>
+            </div>
+            <div id="live-players-list">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // إعدادات الفايربيز
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            databaseURL: "https://xpetvip-9450f-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let USER_ID = urlParams.get('id') || localStorage.getItem("user_id");
+        let currentBalance = 0;
+
+        if (!USER_ID || USER_ID === "undefined" || USER_ID === "null") {
+            window.location.replace("index.html");
+        } else {
+            localStorage.setItem("user_id", USER_ID);
+            database.ref('User/' + USER_ID + '/balance').on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    currentBalance = parseFloat(snapshot.val());
+                    document.getElementById('header-user-balance').innerText = currentBalance.toFixed(2);
+                }
+            });
+        }
+
+        // متغيرات التحكم باللعبة والنمط المطلوب
+        let gameState = "countdown"; 
+        let countdownValue = 6;
+        let currentOdds = 1.00;
+        let crashPoint = 0.00;
+        let roundCounter = 1; // عداد تتابع الجولات (1، 2، 3 أود عالي | 4، 5 أود منخفض)
+        
+        let userHasBet = false;
+        let userIsInGame = false;
+        let userBetAmount = 0;
+        let gameLoopInterval, countdownInterval;
+        
+        const botNames = ["Shadow123", "UserPro", "Ahmed12", "LionVIP", "Captain_Sh", "Dev77", "Star99"];
+        let activeBots = [];
+
+        // دورة تشغيل النظام
+        function initGameCycle() {
+            gameState = "countdown";
+            countdownValue = 6;
+            currentOdds = 1.00;
+            userIsInGame = false;
+            
+            document.getElementById('game-screen').className = "chart-section";
+            document.getElementById('prediction-status-badge').style.display = "none";
+
+            document.getElementById('countdown-text').style.display = "block";
+            document.getElementById('countdown-text').innerText = `تبدأ خلال: 6`;
+            document.getElementById('live-odds-text').style.display = "none";
+            document.getElementById('status-msg-text').style.display = "none";
+            document.getElementById('plane-path').style.strokeDashoffset = "1000";
+
+            if(!userHasBet) {
+                setActionButtonState("bet-place", "PLACE A BET");
+            } else {
+                setActionButtonState("bet-placed", "تم الرهان");
+            }
+
+            // حساب الأود مسبقاً للجولة الحالية بناءً على النمط المحدد وعرضه بالشارة العلّوية
+            calculateNextCrashPoint();
+            generateLiveBots();
+
+            countdownInterval = setInterval(() => {
+                countdownValue--;
+                if (countdownValue > 0) {
+                    document.getElementById('countdown-text').innerText = `تبدأ خلال: ${countdownValue}`;
+                } else {
+                    clearInterval(countdownInterval);
+                    startFlight();
+                }
+            }, 1000);
+        }
+
+        // حساب نقطة الانفجار وتطبيق الـ Pattern بدقة بالغة ومطابقة الشاشة
+        function calculateNextCrashPoint() {
+            if (roundCounter <= 3) {
+                // أول 3 أدوار: انفجار عند أود عالي أزيد من 7 (من 7.15 إلى 14.50 مثلاً)
+                crashPoint = 7.15 + Math.random() * 7.35;
+            } else {
+                // الدورين التاليين (الرابع والخامس): أقل من 4 (من 1.25 إلى 3.85)
+                crashPoint = 1.25 + Math.random() * 2.60;
+            }
+            
+            // تحديث نص بادج التوقع مسبقاً ليتطابق مع نقطة الانفجار تماماً
+            const predBadge = document.getElementById('prediction-status-badge');
+            predBadge.innerText = `ستنفجر عند: ${crashPoint.toFixed(2)}x`;
+        }
+
+        // بدء الإقلاع والصعود
+        function startFlight() {
+            gameState = "flying";
+            document.getElementById('countdown-text').style.display = "none";
+            document.getElementById('live-odds-text').style.display = "block";
+            
+            // إظهار شارة التوقع عند الطيران تماماً كالفيديو
+            document.getElementById('prediction-status-badge').style.display = "block";
+
+            if(userHasBet) {
+                userIsInGame = true;
+                userHasBet = false; 
+            }
+
+            let startTime = Date.now();
+
+            gameLoopInterval = setInterval(() => {
+                let elapsed = (Date.now() - startTime) / 1000;
+                
+                // صعود تدريجي انسيابي رائع ومتناسق
+                currentOdds = 1.00 + Math.pow(elapsed, 1.2) * 0.50;
+                
+                if (currentOdds >= crashPoint) {
+                    currentOdds = crashPoint;
+                }
+                
+                document.getElementById('live-odds-text').innerText = currentOdds.toFixed(2) + "x";
+
+                // تحريك خط الـ SVG بالتزامن مع الارتفاع
+                let progress = Math.min((currentOdds - 1) * 75, 1000);
+                document.getElementById('plane-path').style.strokeDashoffset = (1000 - progress);
+
+                if (userIsInGame) {
+                    let liveWin = userBetAmount * currentOdds;
+                    setActionButtonState("cashout", `سحب ${liveWin.toFixed(2)} ج.م`);
+                } else if(!userHasBet) {
+                    setActionButtonState("bet-placed", "الجولة بدأت");
+                }
+
+                updateBotsLiveAction();
+
+                if (currentOdds >= crashPoint) {
+                    clearInterval(gameLoopInterval);
+                    triggerCrash();
+                }
+            }, 60);
+        }
+
+        // حدوث الانفجار الفعلي عند تطابق الأود مع الشارة
+        function triggerCrash() {
+            gameState = "crashed";
+            document.getElementById('game-screen').classList.add('crashed-state');
+            document.getElementById('live-odds-text').style.display = "none";
+            
+            const msgEl = document.getElementById('status-msg-text');
+            msgEl.style.display = "block";
+            msgEl.style.color = "#e74c3c";
+
+            if (userIsInGame) {
+                userIsInGame = false;
+                msgEl.innerText = `انفجرت عند ${crashPoint.toFixed(2)}x`;
+                
+                let newBal = currentBalance - userBetAmount;
+                database.ref('User/' + USER_ID).update({ balance: newBal });
+            } else {
+                msgEl.innerText = `انفجرت عند ${crashPoint.toFixed(2)}x`;
+            }
+
+            finalizeBotsTable();
+            setActionButtonState("bet-placed", "انتهت الجولة");
+
+            // زيادة العداد وتدوير النمط (3 أدوار عالي ثم دورين منخفض)
+            roundCounter++;
+            if (roundCounter > 5) {
+                roundCounter = 1;
+            }
+
+            setTimeout(() => {
+                initGameCycle();
+            }, 3000);
+        }
+
+        // تنفيذ الرهان أو السحب الفوري الفائز
+        function handleMainAction() {
+            if (gameState === "countdown" && !userHasBet) {
+                let inputVal = parseFloat(document.getElementById('bet-input').value);
+                if (isNaN(inputVal) || inputVal <= 0) return alert("أدخل مبلغ صحيح");
+                if (inputVal > currentBalance) return alert("رصيدك الحالي لا يكفي");
+
+                userBetAmount = inputVal;
+                userHasBet = true;
+                setActionButtonState("bet-placed", "تم الرهان");
+            } 
+            else if (gameState === "flying" && userIsInGame) {
+                userIsInGame = false;
+                let finalWinOdds = currentOdds;
+                let winAmount = userBetAmount * finalWinOdds;
+                let profit = winAmount - userBetAmount;
+
+                let newBal = currentBalance + profit;
+                database.ref('User/' + USER_ID).update({ balance: newBal });
+
+                document.getElementById('game-screen').className = "chart-section";
+                document.getElementById('live-odds-text').style.display = "none";
+                
+                const msgEl = document.getElementById('status-msg-text');
+                msgEl.style.display = "block";
+                msgEl.style.color = "#2ecc71";
+                msgEl.innerText = `فزت بـ ${winAmount.toFixed(2)} ج.م`;
+
+                setActionButtonState("bet-placed", "تم السحب بنجاح");
+            }
+        }
+
+        function setActionButtonState(state, text) {
+            const btn = document.getElementById('action-btn');
+            btn.innerText = text;
+            btn.className = "btn-main-action"; 
+            
+            if (state === "bet-place") {
+                btn.classList.add("btn-bet-place");
+                btn.disabled = false;
+            } else if (state === "bet-placed") {
+                btn.classList.add("btn-bet-placed");
+                btn.disabled = true;
+            } else if (state === "cashout") {
+                btn.classList.add("btn-cashout-active");
+                btn.disabled = false;
+            }
+        }
+
+        function generateLiveBots() {
+            activeBots = [];
+            const container = document.getElementById('live-players-list');
+            container.innerHTML = "";
+
+            if (userHasBet) {
+                let userRow = document.createElement('div');
+                userRow.className = "player-row";
+                userRow.innerHTML = `
+                    <div class="row-username" style="color:#3498db;">أنت</div>
+                    <div class="row-odds" id="user-row-odds">-</div>
+                    <div class="row-bet">${userBetAmount.toFixed(0)} ج.م</div>
+                    <div class="row-win" id="user-row-win">-</div>
+                `;
+                container.appendChild(userRow);
+            }
+
+            botNames.forEach(name => {
+                let botBet = [10, 20, 50, 100, 200][Math.floor(Math.random() * 5)];
+                let botWithdrawPoint = 1.15 + Math.random() * (crashPoint - 0.3); 
+
+                activeBots.push({
+                    name: name,
+                    bet: botBet,
+                    targetOdds: botWithdrawPoint,
+                    hasCashedOut: false
+                });
+
+                let row = document.createElement('div');
+                row.className = "player-row";
+                row.innerHTML = `
+                    <div class="row-username">${name}</div>
+                    <div class="row-odds" id="odds-${name}">-</div>
+                    <div class="row-bet">${botBet} ج.م</div>
+                    <div class="row-win" id="win-${name}">-</div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function updateBotsLiveAction() {
+            activeBots.forEach(bot => {
+                if (!bot.hasCashedOut && currentOdds >= bot.targetOdds && bot.targetOdds < crashPoint) {
+                    bot.hasCashedOut = true;
+                    let winVal = bot.bet * bot.targetOdds;
+                    document.getElementById(`odds-${bot.name}`).innerText = bot.targetOdds.toFixed(2) + "x";
+                    document.getElementById(`win-${bot.name}`).innerText = winVal.toFixed(1) + " ج.م";
+                }
+            });
+
+            if (userIsInGame === false && document.getElementById('user-row-odds')) {
+                document.getElementById('user-row-odds').innerText = currentOdds.toFixed(2) + "x";
+                document.getElementById('user-row-win').innerText = (userBetAmount * currentOdds).toFixed(1) + " ج.م";
+            }
+        }
+
+        function finalizeBotsTable() {
+            activeBots.forEach(bot => {
+                if (!bot.hasCashedOut) {
+                    document.getElementById(`odds-${bot.name}`).innerText = "-";
+                    document.getElementById(`win-${bot.name}`).innerText = "-";
+                }
+            });
+        }
+
+        function goBack() { window.location.href = "dashboard.html?id=" + USER_ID; }
+        function goToDeposit() { window.location.href = "deposit.html?id=" + USER_ID; }
+
+        window.onload = () => { initGameCycle(); };
+    </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إيداع أموال</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .deposit-container { background-color: #ffffff; width: 100%; max-width: 400px; height: 100vh; max-height: 850px; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background-color: #f8fafc; overflow-y: auto; }
+        .header-nav { display: flex; justify-content: space-between; align-items: center; padding: 20px 25px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; }
+        .header-title { font-size: 26px; font-weight: bold; color: #0f2d59; }
+        .btn-back { font-size: 18px; color: #0f2d59; text-decoration: none; cursor: pointer; font-weight: bold; }
+        .content-area { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        .section-title { font-size: 20px; color: #0f2d59; font-weight: bold; }
+        .methods-card { background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #edf2f7; }
+        .method-item { display: flex; justify-content: flex-end; align-items: center; padding: 20px 25px; font-size: 18px; font-weight: bold; color: #0f2d59; cursor: pointer; transition: background-color 0.2s; }
+        .method-item:not(:last-child) { border-bottom: 1px solid #edf2f7; }
+        .method-item:hover { background-color: #f8fafc; }
+        
+        /* لوحة إدخل البيانات الموحدة الديناميكية */
+        .deposit-panel { background-color: #ffffff; border-radius: 24px; padding: 25px 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #edf2f7; display: none; flex-direction: column; gap: 15px; }
+        .panel-header-title { font-size: 20px; font-weight: bold; color: #0f2d59; text-align: center; }
+        .panel-subtitle { font-size: 16px; color: #7f8c8d; text-align: center; }
+        .number-box { background-color: #f0f4f8; border-radius: 16px; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-copy { background-color: #0f2d59; color: white; border: none; padding: 8px 25px; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .target-number { font-size: 22px; font-weight: bold; color: #0f2d59; letter-spacing: 1px; }
+        .limit-notice { font-size: 16px; font-weight: bold; color: #0f2d59; text-align: center; margin-top: 5px; }
+        .input-style { width: 100%; padding: 14px; border: 1px solid #e2e8f0; border-radius: 14px; font-size: 16px; outline: none; text-align: center; background-color: #f8fafc; }
+        .btn-submit-deposit { background-color: #27ae60; color: white; border: none; width: 100%; padding: 15px; border-radius: 25px; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(46, 204, 113, 0.2); margin-top: 10px; }
+        
+        /* شاشة الفحص بالذكاء الاصطناعي (العداد) */
+        .process-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(15, 45, 89, 0.95); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: white; padding: 20px; text-align: center; }
+        .timer-circle { font-size: 48px; font-weight: bold; margin: 20px 0; background: rgba(255,255,255,0.1); width: 120px; height: 120px; display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 4px solid #2ecc71; }
+        .process-title { font-size: 22px; font-weight: bold; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="deposit-container">
+        <div class="header-nav">
+            <div class="header-title">إيداع أموال</div>
+            <a class="btn-back" onclick="goBack()">← رجوع</a>
+        </div>
+
+        <div class="content-area">
+            <div class="section-title">اختر وسيلة الإيداع:</div>
+
+            <div class="methods-card">
+                <div class="method-item" onclick="openPanel('فودافون كاش', '01007863751')">فودافون كاش</div>
+                <div class="method-item" onclick="openPanel('إنستا باي', '01210172468')">إنستا باي</div>
+                <div class="method-item" onclick="openPanel('ماي أورنج', '01210172468')">ماي أورنج</div>
+            </div>
+
+            <div class="deposit-panel" id="deposit-panel">
+                <div class="panel-header-title" id="panel-title">فودافون كاش</div>
+                <div class="panel-subtitle">حول المبلغ إلى الرقم التالي:</div>
+
+                <div class="number-box">
+                    <button class="btn-copy" onclick="copyNumber()">نسخ</button>
+                    <span class="target-number" id="target-number">01007863751</span>
+                </div>
+
+                <div class="limit-notice">أقل مبلغ للإيداع 150 ج.م :</div>
+                
+                <input type="number" id="deposit-amount" class="input-style" placeholder="أدخل المبلغ">
+                <input type="number" id="sender-number" class="input-style" placeholder="أكتب الرقم الذي أرسلت منه النقود">
+
+                <button class="btn-submit-deposit" onclick="processAISubmission()">تأكيد الإيداع</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="process-overlay" id="process-overlay">
+        <div class="process-title" id="process-status">جاري فحص الإيداع بالذكاء الاصطناعي...</div>
+        <div class="timer-circle" id="countdown-timer">40</div>
+        <div style="color: #bdc3c7;" id="process-desc">يرجى عدم إغلاق الصفحة حتى اكتمال التحقق وتحديث الرصيد.</div>
+    </div>
+
+    <script>
+        // ⚠️ إعدادات الفيربيز الخاصة بمشروعك (تأكد من مطابقتها في index و dashboard)
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            databaseURL: "https://xpetvip-9450f-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // إعدادات بوت التليجرام الخاص بك للإشعارات الاحتياطية
+        const TELEGRAM_TOKEN = "8679445963:AAHtc7r-qdZXxC4Asna2Mf8d9G48mnfb4tE"; 
+        const TELEGRAM_CHAT_ID = "8280203734"; 
+
+        // سحب معرف المستخدم الحالي من الذاكرة المحلية
+        const USER_ID = localStorage.getItem("user_id") || "غير معروف";
+        let currentMethod = "فودافون كاش";
+
+        function goBack() { window.location.href = "dashboard.html"; }
+
+        // فتح اللوحة السفلية وتحديث نصوصها وأرقام التحويل بناءً على اختيارك
+        function openPanel(methodName, targetNumber) {
+            currentMethod = methodName;
+            document.getElementById('panel-title').innerText = methodName;
+            document.getElementById('target-number').innerText = targetNumber;
+            
+            const panel = document.getElementById('deposit-panel');
+            panel.style.display = 'flex'; 
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyNumber() { 
+            const num = document.getElementById('target-number').innerText; 
+            navigator.clipboard.writeText(num).then(() => { 
+                alert("تم نسخ الرقم بنجاح: " + num); 
+            }); 
+        }
+
+        function processAISubmission() {
+            const amountInput = document.getElementById('deposit-amount').value.trim();
+            const senderNum = document.getElementById('sender-number').value.trim();
+
+            if (!amountInput || parseFloat(amountInput) < 150) { alert("يرجى إدخال مبلغ صحيح (الحد الأدنى 150 ج.م)!"); return; }
+            if (!senderNum || senderNum.length < 11) { alert("يرجى كتابة رقم المحول بشكل صحيح!"); return; }
+
+            // حفظ الطلب في قاعدة البيانات للأدمن + إشعار التليجرام
+            saveRequestAndNotify(amountInput, senderNum);
+
+            // تشغيل العداد والمحاكاة التفاعلية أمام العميل
+            const overlay = document.getElementById('process-overlay');
+            const timerEl = document.getElementById('countdown-timer');
+            const statusEl = document.getElementById('process-status');
+            overlay.style.display = 'flex';
+            let timeLeft = 40;
+
+            const countdown = setInterval(() => {
+                timeLeft--;
+                timerEl.innerText = timeLeft;
+                if (timeLeft === 30) statusEl.innerText = "جاري مطابقة الرقم المكتوب بالرقم المحول إليه...";
+                if (timeLeft === 15) statusEl.innerText = "تأكيد فحص القيمة والمبلغ المالي المستلم...";
+                if (timeLeft === 5) statusEl.innerText = "تم إرسال الطلب بنجاح! في انتظار موافقة المسؤول...";
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    alert("تم إرسال طلبك للإدارة، سيتم مراجعة الإيداع وتحديث الرصيد فوراً!");
+                    window.location.href = "dashboard.html";
+                }
+            }, 1000);
+        }
+
+        function saveRequestAndNotify(amount, sender) {
+            const randomID = Math.floor(100000 + Math.random() * 900000); 
+            
+            // 1. إرسال وحفظ الطلب مباشرة في الفيربيز ليظهر في موقع الأدمن (admin.html) لايف
+            database.ref('deposit_requests/' + randomID).set({
+                requestId: randomID,
+                userId: USER_ID,
+                method: currentMethod,
+                amount: parseFloat(amount),
+                senderNumber: sender,
+                status: "pending",
+                timestamp: Date.now()
+            });
+
+            // 2. إشعار بوت تليجرام إضافي لإعلامك بدخول طلب جديد فوراً للوحة التحكم
+            const messageText = `🔔 *طلب إيداع جديد باللوحة* #\`${randomID}\`\n\n` +
+                                `💳 *الوسيلة:* ${currentMethod}\n` +
+                                `👤 *العميل (ID):* \`${USER_ID}\`\n` +
+                                `💰 *المبلغ:* ${amount} جنيه\n` +
+                                `📱 *رقم المرسل:* ${sender}`;
+
+            fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: messageText,
+                    parse_mode: "Markdown"
+                })
+            }).catch(err => console.error("Telegram Error: ", err));
+        }
+    </script>
+</body>
+</html>

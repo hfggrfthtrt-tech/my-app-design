@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول وإنشاء حساب</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f4f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        .login-container {
+            background-color: #ffffff;
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            max-height: 850px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .header-graphics {
+            height: 35%;
+            position: relative;
+            background: linear-gradient(135deg, #ffffff 0%, #f4f7fa 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .circle-red {
+            position: absolute;
+            top: -50px;
+            left: 20px;
+            width: 180px;
+            height: 180px;
+            background-color: #e53935;
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .circle-blue {
+            position: absolute;
+            top: -30px;
+            right: -40px;
+            width: 250px;
+            height: 250px;
+            background-color: #1e88e5;
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .ball {
+            position: absolute;
+            top: 70px;
+            width: 110px;
+            height: 110px;
+            background-color: #eef2f7;
+            border-radius: 50%;
+            z-index: 2;
+            box-shadow: inset -10px -10px 20px rgba(0,0,0,0.15), 5px 10px 15px rgba(0,0,0,0.1);
+            border: 1px solid #d1d5db;
+        }
+        
+        .ball::before, .ball::after {
+            content: '';
+            position: absolute;
+            border: 2px dashed #9ca3af;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+        }
+        .ball::before { top: 15px; left: -30px; }
+        .ball::after { top: 15px; right: -30px; }
+
+        .form-container {
+            padding: 30px 40px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #f7f9fc;
+        }
+
+        h2 {
+            color: #0f2d59;
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 40px;
+            margin-top: 10px;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 10px;
+            border: none;
+            background: none;
+            outline: none;
+            font-size: 18px;
+            color: #333;
+            text-align: right;
+        }
+
+        .input-group input:focus {
+            border-bottom: 2px solid #4a90e2;
+        }
+
+        .input-group input::placeholder {
+            color: #9e9e9e;
+            font-size: 18px;
+        }
+
+        .eye-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 20px;
+            user-select: none;
+        }
+
+        .btn-login {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 25px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(74, 144, 226, 0.2);
+        }
+
+        .create-account {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .create-account a {
+            color: #4a90e2;
+            text-decoration: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            background-color: #323232;
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .dialog-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .dialog-box {
+            background-color: #ffffff;
+            width: 90%;
+            max-width: 360px;
+            border-radius: 28px;
+            padding: 30px 24px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+        }
+
+        .dialog-overlay.open .dialog-box {
+            transform: scale(1);
+        }
+
+        .success-icon-container {
+            width: 80px;
+            height: 80px;
+            background-color: #e8f5e9;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 20px auto;
+        }
+
+        .success-icon {
+            width: 40px;
+            height: 40px;
+            background-color: #4caf50;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .dialog-title {
+            color: #0f2d59;
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 25px;
+        }
+
+        .data-card {
+            background-color: #f0f4f8;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-align: right;
+            margin-bottom: 20px;
+        }
+
+        .data-values {
+            font-size: 24px;
+            color: #0f2d59;
+            font-weight: bold;
+            line-height: 1.8;
+            text-align: left;
+            flex: 1;
+        }
+
+        .data-values div {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .data-values div:hover {
+            color: #4a90e2;
+        }
+
+        .data-labels {
+            font-size: 18px;
+            color: #758aa2;
+            text-align: right;
+            line-height: 1.8;
+            padding-right: 10px;
+        }
+
+        .btn-actions-row {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .btn-copy {
+            background-color: #f0f4f8;
+            color: #5c7593;
+            border: none;
+            padding: 12px 35px;
+            border-radius: 18px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .btn-copy:hover {
+            background-color: #e2e9f0;
+        }
+
+        .btn-next {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 15px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(76, 175, 80, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        <div class="header-graphics">
+            <div class="circle-red"></div>
+            <div class="circle-blue"></div>
+            <div class="ball"></div>
+        </div>
+
+        <div class="form-container">
+            <h2>تسجيل الدخول</h2>
+            <form id="login-form">
+                <div class="input-group">
+                    <input type="text" id="username" placeholder="اسم المستخدم" required>
+                </div>
+                <div class="input-group">
+                    <span class="eye-icon">👁️</span>
+                    <input type="password" id="password" placeholder="كلمة المرور" required>
+                </div>
+                <button type="submit" class="btn-login">دخول</button>
+            </form>
+
+            <div class="create-account">
+                <a id="btn-create-account">إنشاء حساب جديد</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">جاري إنشاء الحساب...</div>
+
+    <div class="dialog-overlay" id="dialog-overlay">
+        <div class="dialog-box">
+            <div class="success-icon-container">
+                <div class="success-icon">✓</div>
+            </div>
+            
+            <div class="dialog-title">تم التسجيل بنجاح</div>
+
+            <div class="data-card">
+                <div class="data-values">
+                    <div id="generated-id" title="اضغط للنسخ السريع">1720800787</div>
+                    <div id="generated-pass" title="اضغط للنسخ السريع">tdw6vkN1</div>
+                </div>
+                <div class="data-labels">
+                    <div>اسم المستخدم:</div>
+                    <div>كلمة المرور:</div>
+                </div>
+            </div>
+
+            <div class="btn-actions-row">
+                <button class="btn-copy" id="btn-copy">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    نسخ
+                </button>
+            </div>
+
+            <button class="btn-next" id="btn-close-dialog">التالي</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 🌟 ربط قاعدة البيانات لحل مشكلة الدوران الـ Loop 🌟 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            databaseURL: "https://xpetvip-9450f-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // فحص فوري: لو المستخدم مسجل دخول بالفعل، يدخل فوراً بدون تكرار
+        if (localStorage.getItem("isLoggedIn") === "true" && localStorage.getItem("user_id")) {
+            window.location.replace("dashboard.html?id=" + localStorage.getItem("user_id"));
+        }
+
+        const eyeIcon = document.querySelector('.eye-icon');
+        const passwordInput = document.getElementById('password');
+        const usernameInput = document.getElementById('username'); 
+        const loginForm = document.getElementById('login-form'); 
+
+        let correctUsername = localStorage.getItem("savedUser") || "";
+        let correctPassword = localStorage.getItem("savedPass") || "";
+
+        if (correctUsername && correctPassword) {
+            usernameInput.value = correctUsername;
+            passwordInput.value = correctPassword;
+        }
+
+        eyeIcon.addEventListener('click', () => {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+            } else {
+                passwordInput.type = 'password';
+            }
+        });
+
+        function generateRandomID() {
+            // توليد ID مكون من 8 أرقام ليتناسق تماماً مع المظهر القديم والفيديو
+            return String(Math.floor(10000000 + Math.random() * 90000000)); 
+        }
+
+        function generateRandomPassword() {
+            const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            let pass = "";
+            for (let i = 0; i < 8; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return pass; 
+        }
+
+        const btnCreate = document.getElementById('btn-create-account');
+        const toast = document.getElementById('toast');
+        const dialogOverlay = document.getElementById('dialog-overlay');
+        const generatedIdEl = document.getElementById('generated-id');
+        const generatedPassEl = document.getElementById('generated-pass');
+        const btnCopy = document.getElementById('btn-copy');
+        const btnCloseDialog = document.getElementById('btn-close-dialog');
+
+        btnCreate.addEventListener('click', () => {
+            toast.innerText = "جاري إنشاء الحساب...";
+            toast.classList.add('show');
+            
+            // توليد الحساب الجديد
+            const newID = generateRandomID();
+            const newPass = generateRandomPassword();
+
+            // 🛠️ حفظ الحساب الجديد لايف في الفيربيز فوراً لمنع الـ Loop وحماية البيانات
+            database.ref('User/' + newID).set({
+                userId: newID,
+                password: newPass,
+                balance: 0,
+                createdAt: Date.now()
+            }).then(() => {
+                correctUsername = newID;
+                correctPassword = newPass;
+
+                localStorage.setItem("savedUser", correctUsername);
+                localStorage.setItem("savedPass", correctPassword);
+                localStorage.setItem("user_id", correctUsername);
+
+                generatedIdEl.innerText = correctUsername;
+                generatedPassEl.innerText = correctPassword;
+
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    dialogOverlay.classList.add('open');
+                }, 1000);
+            }).catch(err => {
+                toast.classList.remove('show');
+                alert("خطأ اتصال بالشبكة: " + err.message);
+            });
+        });
+
+        function showCustomToast(message) {
+            toast.innerText = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 1500);
+        }
+
+        btnCopy.addEventListener('click', () => {
+            const fullText = `اسم المستخدم: ${correctUsername}\nكلمة المرور: ${correctPassword}`;
+            navigator.clipboard.writeText(fullText).then(() => {
+                showCustomToast("تم نسخ الحساب بالكامل!");
+            });
+        });
+
+        generatedIdEl.addEventListener('click', () => {
+            navigator.clipboard.writeText(correctUsername).then(() => {
+                showCustomToast("تم نسخ اسم المستخدم!");
+            });
+        });
+
+        generatedPassEl.addEventListener('click', () => {
+            navigator.clipboard.writeText(correctPassword).then(() => {
+                showCustomToast("تم نسخ كلمة المرور!");
+            });
+        });
+
+        btnCloseDialog.addEventListener('click', () => {
+            usernameInput.value = correctUsername;
+            passwordInput.value = correctPassword;
+
+            dialogOverlay.classList.remove('open');
+            showCustomToast("تم ملء بيانات الدخول تلقائياً!");
+        });
+
+        loginForm.addEventListener('submit', (event) => {
+            event.preventDefault(); 
+
+            const enteredUsername = usernameInput.value.trim();
+            const enteredPassword = passwordInput.value.trim();
+
+            if (enteredUsername === "" || enteredPassword === "") {
+                showCustomToast("يرجى إدخال البيانات!");
+                return;
+            }
+
+            // فحص تسجيل الدخول عن طريق الفيربيز لضمان الاستقرار التام
+            database.ref('User/' + enteredUsername).once('value').then((snapshot) => {
+                if (snapshot.exists()) {
+                    const userData = snapshot.val();
+                    
+                    // التحقق من صحة الباسورد (إما المخزن محلياً أو المرفوع بالسيرفر)
+                    if (enteredPassword === userData.password || enteredPassword === correctPassword) {
+                        showCustomToast("تم التحقق بنجاح! جاري الانتقال لوجهة الألعاب...");
+                        
+                        localStorage.setItem("isLoggedIn", "true");
+                        localStorage.setItem("user_id", enteredUsername);
+
+                        setTimeout(() => {
+                            // التوجيه الآمن بـ Parameter لكسر مشكلة لفة الـ WebView السوداء
+                            window.location.replace("dashboard.html?id=" + enteredUsername); 
+                        }, 1000);
+                    } else {
+                        showCustomToast("كلمة المرور غير صحيحة!");
+                    }
+                } else {
+                    showCustomToast("كود الحساب غير صحيح أو لم يتم إنشاؤه!");
+                }
+            }).catch(() => {
+                // حل احتياطي في حال عدم وجود إنترنت لقراءة الذاكرة المحلية
+                if (enteredUsername === correctUsername && enteredPassword === correctPassword && correctUsername !== "") {
+                    showCustomToast("تم التحقق محلياً! جاري الانتقال...");
+                    localStorage.setItem("isLoggedIn", "true");
+                    localStorage.setItem("user_id", enteredUsername);
+                    setTimeout(() => {
+                        window.location.replace("dashboard.html?id=" + enteredUsername); 
+                    }, 1000);
+                } else {
+                    showCustomToast("خطأ في التحقق من البيانات!");
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple of Fortune</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body { 
+            background: #0b110e url('https://images.unsplash.com/photo-1511497584788-876760111969?w=600') no-repeat center center;
+            background-size: cover;
+            color: #ffffff; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .game-container { 
+            background-color: rgba(16, 28, 23, 0.92); 
+            width: 100%; 
+            max-width: 415px; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+        
+        .game-header { 
+            padding: 12px 15px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background-color: rgba(10, 16, 13, 0.95);
+            border-bottom: 1px solid rgba(255,255,255,0.05); 
+        }
+        .back-btn { background: none; border: none; color: #ffffff; font-size: 22px; cursor: pointer; }
+        
+        .balance-container {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 5px 12px;
+            border-radius: 20px;
+            gap: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .balance-amount { font-size: 16px; font-weight: bold; color: #ffffff; }
+
+        .game-area { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 10px 15px; 
+            display: flex; 
+            flex-direction: column-reverse; 
+            gap: 7px;
+            justify-content: flex-start;
+        }
+        
+        .level-row { 
+            display: flex; 
+            align-items: center; 
+            width: 100%; 
+            justify-content: space-between;
+            position: relative;
+        }
+        .level-row.disabled { opacity: 0.3; pointer-events: none; }
+        
+        .odds-badge { 
+            min-width: 50px; 
+            font-size: 11px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3px 6px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .level-row.active .odds-badge {
+            background: #2ecc71;
+            color: #000000;
+        }
+
+        .cells-wrapper {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+            justify-content: flex-end;
+            margin-right: 10px;
+        }
+        .apple-cell { 
+            width: 46px; 
+            height: 46px; 
+            background: radial-gradient(circle, #7e5334 0%, #4a2e1b 100%);
+            border-radius: 50%; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            font-size: 22px; 
+            cursor: pointer; 
+            transition: transform 0.1s; 
+            border: 2px solid #362113;
+            box-shadow: inset 0 3px 5px rgba(255,255,255,0.2), 0 4px 6px rgba(0,0,0,0.4);
+        }
+        .level-row.disabled .apple-cell {
+            background: radial-gradient(circle, #3d3d3d 0%, #242424 100%);
+            border-color: #1a1a1a;
+            box-shadow: none;
+        }
+        .level-row.active .apple-cell {
+            transform: scale(1.02);
+            border-color: #bdc3c7;
+        }
+        
+        .apple-cell.good { 
+            background: radial-gradient(circle, #2ecc71 0%, #1e7e34 100%) !important; 
+            border-color: #27ae60 !important;
+        }
+        .apple-cell.bad { 
+            background: radial-gradient(circle, #e74c3c 0%, #962d22 100%) !important; 
+            border-color: #c0392b !important;
+        }
+
+        .controls-panel { 
+            padding: 12px 15px; 
+            background-color: rgba(10, 16, 13, 0.98); 
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+        }
+
+        .quick-bet-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 8px;
+        }
+        .btn-quick {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ffffff;
+            padding: 8px 0;
+            font-size: 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-quick:active { background: rgba(255,255,255,0.15); }
+
+        .bet-input-field {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+        }
+        .bet-input-field input {
+            background: none;
+            border: none;
+            outline: none;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: left;
+            width: 70%;
+        }
+        .currency-label { color: rgba(255,255,255,0.6); font-size: 15px; font-weight: bold; }
+
+        .profit-box {
+            display: none;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            padding: 8px 0;
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        .main-action-btn { 
+            width: 100%; 
+            padding: 12px; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 18px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            text-align: center; 
+        }
+        .btn-bet { background-color: #3498db; color: white; }
+        .btn-cashout { background-color: #2980b9; color: white; display: none; }
+
+        .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85); color: white; padding: 12px 25px; border-radius: 25px; font-size: 14px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="game-header">
+            <button class="back-btn" onclick="goBack()">➔</button>
+            <div class="balance-container">
+                <span class="balance-amount" id="game-balance">0.00 ج.م</span>
+            </div>
+        </div>
+
+        <div class="game-area" id="game-area"></div>
+
+        <div class="controls-panel">
+            
+            <div class="profit-box" id="profit-box">الأرباح الحالية: 0.00 ج.م</div>
+
+            <div class="bet-input-field" id="input-container">
+                <input type="number" id="bet-amount" value="10" min="10" max="5000">
+                <span class="currency-label">ج.م</span>
+            </div>
+
+            <div class="quick-bet-row" id="quick-buttons">
+                <button class="btn-quick" onclick="setBet('min')">أدنى</button>
+                <button class="btn-quick" onclick="setBet('half')">X/2</button>
+                <button class="btn-quick" onclick="setBet('double')">X2</button>
+                <button class="btn-quick" onclick="setBet('max')">أقصى</button>
+            </div>
+            
+            <button id="action-btn" class="main-action-btn btn-bet" onclick="startGame()">الرهان</button>
+            <button id="cashout-btn" class="main-action-btn btn-cashout" onclick="cashOut()">خذ الأرباح</button>
+        </div>
+    </div>
+
+    <div class="toast" id="game-toast"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            databaseURL: "https://xpetvip-9450f-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let USER_ID = urlParams.get('id') || localStorage.getItem("user_id");
+        
+        let userBalance = 0;
+        let isGameActive = false;
+        let currentLevel = 1; 
+        let betAmount = 10;
+
+        const multipliers = [1.23, 1.54, 1.93, 2.41, 4.02, 6.71, 11.18, 27.97, 69.93, 349.68];
+        
+        // توزيع عدد التفاح الفاسد بناءً على طلبك:
+        // الصف 1، 2، 3، 4 -> 4 تفاحات سليمة (يعني 1 بايظة)
+        // الصف 5، 6، 7 -> 3 تفاحات سليمة (يعني 2 بايظين)
+        // الصف 8، 9 -> 2 تفاحات سليمة (يعني 3 بايظين)
+        // الصف 10 -> 1 تفاحة سليمة (يعني 4 بايظين)
+        const badApplesPerLevel = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4]; 
+        let gameMap = {};
+
+        const balanceEl = document.getElementById('game-balance');
+        const betInput = document.getElementById('bet-amount');
+        const actionBtn = document.getElementById('action-btn');
+        const cashoutBtn = document.getElementById('cashout-btn');
+        const gameArea = document.getElementById('game-area');
+        const profitBox = document.getElementById('profit-box');
+        const toastEl = document.getElementById('game-toast');
+
+        if (!USER_ID || USER_ID === "null" || USER_ID === "undefined") {
+            window.location.replace("index.html");
+        } else {
+            database.ref('User/' + USER_ID + '/balance').on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    userBalance = parseFloat(snapshot.val());
+                    balanceEl.innerText = userBalance.toFixed(2) + " ج.م";
+                }
+            });
+        }
+
+        function buildGrid() {
+            gameArea.innerHTML = "";
+            for (let lvl = 1; lvl <= 10; lvl++) {
+                const row = document.createElement('div');
+                row.className = `level-row disabled`;
+                row.id = `level-row-${lvl}`;
+                
+                const badge = document.createElement('div');
+                badge.className = 'odds-badge';
+                badge.innerText = `x ${multipliers[lvl-1]}`;
+                row.appendChild(badge);
+                
+                const cellsWrapper = document.createElement('div');
+                cellsWrapper.className = 'cells-wrapper';
+                
+                for (let cellIdx = 0; cellIdx < 5; cellIdx++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'apple-cell';
+                    cell.setAttribute('onclick', `selectApple(${lvl}, ${cellIdx})`);
+                    cellsWrapper.appendChild(cell);
+                }
+                
+                row.appendChild(cellsWrapper);
+                gameArea.appendChild(row);
+            }
+        }
+
+        // إعدادات أزرار التحكم بالرهان الذكية المعدلة
+        function setBet(type) {
+            if (isGameActive) return;
+            let current = parseFloat(betInput.value) || 10;
+            
+            if (type === 'min') {
+                betInput.value = 10;
+            } else if (type === 'half') {
+                betInput.value = Math.max(10, Math.floor(current / 2));
+            } else if (type === 'double') {
+                let doubled = Math.floor(current * 2);
+                betInput.value = doubled > 5000 ? 5000 : doubled;
+            } else if (type === 'max') {
+                if (userBalance > 5000) {
+                    betInput.value = 5000;
+                } else {
+                    betInput.value = Math.floor(userBalance > 10 ? userBalance : 10);
+                }
+            }
+        }
+
+        function startGame() {
+            if (isGameActive) return;
+            
+            betAmount = parseFloat(betInput.value);
+            if (isNaN(betAmount) || betAmount < 10) {
+                showToast("الحد الأدنى للرهان هو 10 ج.م");
+                return;
+            }
+            if (betAmount > 5000) {
+                showToast("أقصى مبلغ للرهان هو 5000 ج.م");
+                return;
+            }
+            if (userBalance < betAmount) {
+                showToast("رصيدك غير كافٍ!");
+                return;
+            }
+            
+            database.ref('User/' + USER_ID).update({
+                balance: userBalance - betAmount
+            }).then(() => {
+                generateGameMap();
+                isGameActive = true;
+                currentLevel = 1;
+                
+                document.getElementById('input-container').style.display = 'none';
+                document.getElementById('quick-buttons').style.display = 'none';
+                profitBox.style.display = 'block';
+                profitBox.innerText = `الأرباح الحالية: 0.00 ج.م`;
+
+                buildGrid();
+                activateLevel(1);
+                
+                actionBtn.style.display = "none";
+                cashoutBtn.style.display = "block";
+                cashoutBtn.innerText = `خذ الأرباح`;
+            }).catch(() => {
+                showToast("خطأ في الاتصال بالخادم");
+            });
+        }
+
+        function generateGameMap() {
+            gameMap = {};
+            for (let lvl = 1; lvl <= 10; lvl++) {
+                gameMap[lvl] = [0, 0, 0, 0, 0];
+                let badCount = badApplesPerLevel[lvl - 1];
+                let placed = 0;
+                while (placed < badCount) {
+                    let randIdx = Math.floor(Math.random() * 5);
+                    if (gameMap[lvl][randIdx] === 0) {
+                        gameMap[lvl][randIdx] = 1;
+                        placed++;
+                    }
+                }
+            }
+        }
+
+        function activateLevel(lvl) {
+            for (let i = 1; i <= 10; i++) {
+                const row = document.getElementById(`level-row-${i}`);
+                if (i === lvl) {
+                    row.classList.remove('disabled');
+                    row.classList.add('active');
+                } else {
+                    row.classList.remove('active');
+                    row.classList.add('disabled');
+                }
+            }
+        }
+
+        function selectApple(lvl, cellIdx) {
+            if (!isGameActive || lvl !== currentLevel) return;
+            
+            const currentRow = document.getElementById(`level-row-${lvl}`);
+            const cells = currentRow.querySelectorAll('.apple-cell');
+            const selectedCell = cells[cellIdx];
+            const isBad = gameMap[lvl][cellIdx] === 1;
+            
+            if (isBad) {
+                selectedCell.innerHTML = "🍎";
+                selectedCell.classList.add('bad');
+                endGame(false);
+            } else {
+                selectedCell.innerHTML = "🍏";
+                selectedCell.classList.add('good');
+                
+                let currentWin = betAmount * multipliers[currentLevel - 1];
+                profitBox.innerText = `الأرباح الحالية: ${currentWin.toFixed(2)} ج.م`;
+
+                if (currentLevel === 10) {
+                    endGame(true);
+                } else {
+                    currentLevel++;
+                    activateLevel(currentLevel);
+                }
+            }
+        }
+
+        function cashOut() {
+            if (!isGameActive || currentLevel === 1) return;
+            endGame(true);
+        }
+
+        function endGame(isWin) {
+            isGameActive = false;
+            
+            document.getElementById('input-container').style.display = 'flex';
+            document.getElementById('quick-buttons').style.display = 'grid';
+            profitBox.style.display = 'none';
+
+            actionBtn.style.display = "block";
+            cashoutBtn.style.display = "none";
+            
+            const currentRow = document.getElementById(`level-row-${currentLevel}`);
+            if (currentRow) {
+                const cells = currentRow.querySelectorAll('.apple-cell');
+                gameMap[currentLevel].forEach((val, idx) => {
+                    if (val === 1) {
+                        cells[idx].innerHTML = "🍎";
+                        if (!cells[idx].classList.contains('bad')) cells[idx].style.opacity = "0.5";
+                    }
+                });
+            }
+
+            if (isWin) {
+                let finalMultiplier = multipliers[currentLevel - 1];
+                if (currentRow && !currentRow.querySelector('.good') && currentLevel > 1) {
+                    finalMultiplier = multipliers[currentLevel - 2];
+                }
+                const winAmount = betAmount * finalMultiplier;
+                
+                database.ref('User/' + USER_ID).update({
+                    balance: userBalance + winAmount
+                }).then(() => {
+                    showToast(`تم إضافة الأرباح: +${winAmount.toFixed(2)} ج.م 🎉`);
+                });
+            } else {
+                showToast("تفاحة فاسدة! خسرت الرهان.");
+            }
+            
+            setTimeout(() => {
+                buildGrid();
+            }, 1500);
+        }
+
+        function showToast(msg) {
+            toastEl.innerText = msg;
+            toastEl.className = "toast show";
+            setTimeout(() => { toastEl.classList.remove('show'); }, 2000);
+        }
+
+        function goBack() {
+            window.location.href = "dashboard.html?id=" + USER_ID;
+        }
+
+        window.onload = buildGrid;
+    </script>
+</body>
+</html>

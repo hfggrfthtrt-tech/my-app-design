@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>طلب سحب أموال</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f7fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        
+        .withdraw-container { 
+            background-color: #f7f3f9; /* نفس درجة الخلفية المائلة للبنفسجي الخفيف المريح في الصورة */
+            width: 100%; 
+            max-width: 400px; 
+            height: 100vh; 
+            max-height: 850px; 
+            display: flex; 
+            flex-direction: column; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            overflow-y: auto; 
+            position: relative;
+        }
+
+        /* الهيدر العلوي والتنقل */
+        .header-nav { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 25px 20px; 
+            background-color: #f7f3f9; 
+        }
+        .header-title { font-size: 26px; font-weight: bold; color: #3a2b58; }
+        .btn-back { font-size: 20px; color: #3a2b58; text-decoration: none; cursor: pointer; font-weight: bold; }
+        
+        .content-area { padding: 15px 20px; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+        
+        /* كارت الرصيد الأخضر المتطابق مع الصورة */
+        .balance-card { 
+            background-color: #4caf50; 
+            color: #ffffff; 
+            padding: 22px 20px; 
+            border-radius: 20px; 
+            text-align: center; 
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15); 
+        }
+        .balance-title { font-size: 20px; font-weight: 500; margin-bottom: 8px; display: block; opacity: 0.95; }
+        .balance-amount { font-size: 32px; font-weight: bold; }
+
+        /* بانل الحقول البيضاء الدائرية */
+        .withdraw-panel { 
+            background-color: #ffffff; 
+            border-radius: 24px; 
+            padding: 30px 20px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02); 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+        }
+        
+        .input-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 5px; }
+        .input-label { font-size: 18px; color: #2c3e50; font-weight: bold; text-align: center; }
+        
+        .input-style { 
+            width: 100%; 
+            padding: 15px; 
+            border: 1px solid #e8e8e8; 
+            border-radius: 16px; 
+            font-size: 18px; 
+            outline: none; 
+            text-align: center; 
+            background-color: #ffffff; 
+            color: #333;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.02);
+        }
+        .input-style:focus { border-color: #7c4dff; }
+
+        .min-limit-text { font-size: 14px; color: #7f8c8d; text-align: center; margin-top: 5px; }
+
+        /* الزر البنفسجي الموحد في الأسفل */
+        .btn-submit-withdraw { 
+            background-color: #673ab7; /* اللون البنفسجي المطابق للصورة */
+            color: white; 
+            border: none; 
+            width: 100%; 
+            padding: 16px; 
+            border-radius: 20px; 
+            font-size: 22px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            box-shadow: 0 4px 10px rgba(103, 58, 183, 0.2); 
+            margin-top: auto;
+            margin-bottom: 20px;
+        }
+
+        /* شاشة توست مخصصة للتنبيهات */
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px); background-color: #323232; color: white; padding: 12px 24px; border-radius: 25px; font-size: 16px; z-index: 9999; opacity: 0; transition: 0.3s; pointer-events: none; }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    </style>
+</head>
+<body>
+
+    <div class="withdraw-container">
+        <div class="header-nav">
+            <div class="header-title">طلب سحب أموال</div>
+            <a class="btn-back" onclick="goBack()">← رجوع</a>
+        </div>
+
+        <div class="content-area">
+            <div class="balance-card">
+                <span class="balance-title">الرصيد المتاح حالياً</span>
+                <span class="balance-amount" id="current-balance">جاري التحميل...</span>
+            </div>
+
+            <div class="withdraw-panel">
+                <div class="input-block">
+                    <label class="input-label">المبلغ المطلوب سحبه</label>
+                    <input type="number" id="withdraw-amount" class="input-style" placeholder="أدخل المبلغ بالجنيه">
+                </div>
+                
+                <div class="input-block">
+                    <label class="input-label">رقم المحفظة (فودافون كاش، إلخ)</label>
+                    <input type="number" id="receiver-number" class="input-style" placeholder="أدخل رقم الهاتف للسحب">
+                </div>
+
+                <div class="min-limit-text">الحد الأدنى للسحب: 50 جنيه</div>
+            </div>
+
+            <button class="btn-submit-withdraw" onclick="processWithdrawal()">تأكيد طلب السحب</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSy...", 
+            databaseURL: "https://xpetvip-9450f-default-rtdb.firebaseio.com/"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let USER_ID = urlParams.get('id') || localStorage.getItem("user_id");
+        let currentBalance = 0;
+
+        const balanceEl = document.getElementById('current-balance');
+        const toastEl = document.getElementById('toast');
+
+        function showToast(msg) {
+            toastEl.innerText = msg;
+            toastEl.classList.add('show');
+            setTimeout(() => toastEl.classList.remove('show'), 2000);
+        }
+
+        if (!USER_ID || USER_ID === "undefined" || USER_ID === "null") {
+            window.location.replace("index.html");
+        } else {
+            // جلب ورصد الرصيد الحالي لحظياً من فرع المستخدم
+            database.ref('User/' + USER_ID + '/balance').on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    currentBalance = parseFloat(snapshot.val());
+                    balanceEl.innerText = isNaN(currentBalance) ? "0.00 جنيه" : currentBalance.toFixed(2) + " جنيه";
+                } else {
+                    currentBalance = 0;
+                    balanceEl.innerText = "0.00 جنيه";
+                }
+            });
+        }
+
+        function goBack() { 
+            window.location.replace("dashboard.html?id=" + USER_ID); 
+        }
+
+        function processWithdrawal() {
+            const amountInput = document.getElementById('withdraw-amount').value.trim();
+            const receiverNum = document.getElementById('receiver-number').value.trim();
+
+            if (!amountInput || parseFloat(amountInput) < 50) { 
+                showToast("⚠️ الحد الأدنى لطلب السحب هو 50 جنيه!"); 
+                return; 
+            }
+            
+            const withdrawAmount = parseFloat(amountInput);
+
+            // التحقق من كفاية الرصيد
+            if (withdrawAmount > currentBalance) {
+                showToast("❌ رصيدك الحالي غير كافٍ لإتمام السحب!");
+                return;
+            }
+
+            if (!receiverNum || receiverNum.length < 11) { 
+                showToast("⚠️ يرجى إدخال رقم هاتف صحيح مكون من 11 رقم!"); 
+                return; 
+            }
+
+            // حساب الرصيد المتبقي بعد الخصم
+            const newBalance = currentBalance - withdrawAmount;
+
+            // 1. خصم فوري ومباشر من رصيد المستخدم في فرع User
+            database.ref('User/' + USER_ID).update({
+                balance: newBalance
+            }).then(() => {
+                // 2. إرسال الطلب لفرع السحب الخاص بلوحة الإدارة لـ تظهر لك في الـ Dashboard للأدمن
+                const requestID = Math.floor(100000 + Math.random() * 900000);
+                database.ref('withdraw_requests/' + requestID).set({
+                    requestId: requestID,
+                    userId: String(USER_ID),
+                    amount: withdrawAmount,
+                    receiverNumber: receiverNum,
+                    status: "pending",
+                    timestamp: Date.now()
+                }).then(() => {
+                    alert(`✅ تم إرسال طلب السحب بنجاح!\nخصم مبلغ: ${withdrawAmount} جنيه.\nرصيدك الحالي المتبقي: ${newBalance.toFixed(2)} جنيه.`);
+                    window.location.replace("dashboard.html?id=" + USER_ID);
+                });
+            }).catch(err => {
+                showToast("خطأ أثناء معالجة الخصم: " + err.message);
+            });
+        }
+    </script>
+</body>
+</html>
