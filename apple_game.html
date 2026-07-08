@@ -42,6 +42,18 @@
         }
         .back-btn { background: none; border: none; color: #ffffff; font-size: 22px; cursor: pointer; }
         
+        /* تصميم مربع معرف اللعبة الجديد */
+        .game-id-container {
+            background: rgba(52, 152, 219, 0.15);
+            border: 1px solid rgba(52, 152, 219, 0.4);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #3498db;
+            text-align: center;
+        }
+
         .balance-container {
             display: flex;
             align-items: center;
@@ -208,6 +220,7 @@
     <div class="game-container">
         <div class="game-header">
             <button class="back-btn" onclick="goBack()">➔</button>
+            <div class="game-id-container">GAME ID: <span id="game-id-display">------</span></div>
             <div class="balance-container">
                 <span class="balance-amount" id="game-balance">0.00 ج.م</span>
             </div>
@@ -253,14 +266,9 @@
         let isGameActive = false;
         let currentLevel = 1; 
         let betAmount = 10;
+        let activeGameID = ""; // متغير لتخزين الـ ID الحالي المكون من 6 أرقام
 
         const multipliers = [1.23, 1.54, 1.93, 2.41, 4.02, 6.71, 11.18, 27.97, 69.93, 349.68];
-        
-        // توزيع عدد التفاح الفاسد بناءً على طلبك:
-        // الصف 1، 2، 3، 4 -> 4 تفاحات سليمة (يعني 1 بايظة)
-        // الصف 5، 6، 7 -> 3 تفاحات سليمة (يعني 2 بايظين)
-        // الصف 8، 9 -> 2 تفاحات سليمة (يعني 3 بايظين)
-        // الصف 10 -> 1 تفاحة سليمة (يعني 4 بايظين)
         const badApplesPerLevel = [1, 1, 1, 1, 2, 2, 2, 3, 3, 4]; 
         let gameMap = {};
 
@@ -271,6 +279,7 @@
         const gameArea = document.getElementById('game-area');
         const profitBox = document.getElementById('profit-box');
         const toastEl = document.getElementById('game-toast');
+        const gameIdDisplay = document.getElementById('game-id-display');
 
         if (!USER_ID || USER_ID === "null" || USER_ID === "undefined") {
             window.location.replace("index.html");
@@ -281,6 +290,11 @@
                     balanceEl.innerText = userBalance.toFixed(2) + " ج.م";
                 }
             });
+        }
+
+        // توليد عشوائي لـ ID اللعبة المكون من 6 أرقام
+        function generateRandomGameID() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
         function buildGrid() {
@@ -310,64 +324,55 @@
             }
         }
 
-        // إعدادات أزرار التحكم بالرهان الذكية المعدلة
         function setBet(type) {
             if (isGameActive) return;
             let current = parseFloat(betInput.value) || 10;
-            
-            if (type === 'min') {
-                betInput.value = 10;
-            } else if (type === 'half') {
-                betInput.value = Math.max(10, Math.floor(current / 2));
-            } else if (type === 'double') {
-                let doubled = Math.floor(current * 2);
-                betInput.value = doubled > 5000 ? 5000 : doubled;
-            } else if (type === 'max') {
-                if (userBalance > 5000) {
-                    betInput.value = 5000;
-                } else {
-                    betInput.value = Math.floor(userBalance > 10 ? userBalance : 10);
-                }
-            }
+            if (type === 'min') { betInput.value = 10; } 
+            else if (type === 'half') { betInput.value = Math.max(10, Math.floor(current / 2)); } 
+            else if (type === 'double') { let doubled = Math.floor(current * 2); betInput.value = doubled > 5000 ? 5000 : doubled; } 
+            else if (type === 'max') { if (userBalance > 5000) { betInput.value = 5000; } else { betInput.value = Math.floor(userBalance > 10 ? userBalance : 10); } }
         }
 
         function startGame() {
             if (isGameActive) return;
             
             betAmount = parseFloat(betInput.value);
-            if (isNaN(betAmount) || betAmount < 10) {
-                showToast("الحد الأدنى للرهان هو 10 ج.م");
-                return;
-            }
-            if (betAmount > 5000) {
-                showToast("أقصى مبلغ للرهان هو 5000 ج.م");
-                return;
-            }
-            if (userBalance < betAmount) {
-                showToast("رصيدك غير كافٍ!");
-                return;
-            }
+            if (isNaN(betAmount) || betAmount < 10) { showToast("الحد الأدنى للرهان هو 10 ج.م"); return; }
+            if (betAmount > 5000) { showToast("أقصى مبلغ للرهان هو 5000 ج.م"); return; }
+            if (userBalance < betAmount) { showToast("رصيدك غير كافٍ!"); return; }
             
-            database.ref('User/' + USER_ID).update({
-                balance: userBalance - betAmount
-            }).then(() => {
-                generateGameMap();
-                isGameActive = true;
-                currentLevel = 1;
-                
-                document.getElementById('input-container').style.display = 'none';
-                document.getElementById('quick-buttons').style.display = 'none';
-                profitBox.style.display = 'block';
-                profitBox.innerText = `الأرباح الحالية: 0.00 ج.م`;
+            // توليد الـ ID الجديد للجولة الحالية وعرضه فوراً
+            activeGameID = generateRandomGameID();
+            gameIdDisplay.innerText = activeGameID;
 
-                buildGrid();
-                activateLevel(1);
-                
-                actionBtn.style.display = "none";
-                cashoutBtn.style.display = "block";
-                cashoutBtn.innerText = `خذ الأرباح`;
+            generateGameMap();
+
+            // رفع بيانات خريطة اللعبة فوراً على Firebase بالتزامن مع رقم الـ ID
+            database.ref('ActiveGames/' + activeGameID).set({
+                map: gameMap,
+                status: "active"
+            }).then(() => {
+                // خصم الرصيد وبدء واجهة اللعبة
+                database.ref('User/' + USER_ID).update({
+                    balance: userBalance - betAmount
+                }).then(() => {
+                    isGameActive = true;
+                    currentLevel = 1;
+                    
+                    document.getElementById('input-container').style.display = 'none';
+                    document.getElementById('quick-buttons').style.display = 'none';
+                    profitBox.style.display = 'block';
+                    profitBox.innerText = `الأرباح الحالية: 0.00 ج.م`;
+
+                    buildGrid();
+                    activateLevel(1);
+                    
+                    actionBtn.style.display = "none";
+                    cashoutBtn.style.display = "block";
+                    cashoutBtn.innerText = `خذ الأرباح`;
+                });
             }).catch(() => {
-                showToast("خطأ في الاتصال بالخادم");
+                showToast("خطأ في الاتصال بقاعدة البيانات");
             });
         }
 
@@ -436,6 +441,11 @@
         function endGame(isWin) {
             isGameActive = false;
             
+            // تحديث حالة السيرفر لإيقاف الفحص
+            if(activeGameID) {
+                database.ref('ActiveGames/' + activeGameID).update({ status: "ended" });
+            }
+
             document.getElementById('input-container').style.display = 'flex';
             document.getElementById('quick-buttons').style.display = 'grid';
             profitBox.style.display = 'none';
@@ -471,6 +481,7 @@
             }
             
             setTimeout(() => {
+                gameIdDisplay.innerText = "------";
                 buildGrid();
             }, 1500);
         }
@@ -488,4 +499,5 @@
         window.onload = buildGrid;
     </script>
 </body>
-</html>
+                </html>
+        
